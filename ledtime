@@ -1,0 +1,146 @@
+
+/*************************************************************************
+ * SCROLLING LCD CLOCK FOR SPARK CORE
+ *
+ * A words-based clock ('one o'clock', 'two twenty-five',
+ * 'eight fifty-seven', etc.).
+ *
+ * When the time changes, the old number scrolls off the left while the
+ * new time scrolls in from the right
+ *
+ * **********************************************************************/
+
+// This #include statement was automatically added by the Spark IDE.
+#include "LiquidCrystal/LiquidCrystal.h"
+
+// This #include statement was automatically added by the Spark IDE.
+#include "SparkTime/SparkTime.h"
+
+// Make sure to update these to match how you've wired your pins.
+// pinout on LCD [RS, EN, D4, D5, D6, D7];
+// pin nums LCD  [ 4,  6, 11, 12, 13, 14];
+// Shield Shield [RS, EN, D4, D5, D6, D7];
+// Spark Core    [D3, D5, D2, D4, D7, D8];
+LiquidCrystal lcd(D0, D1, D2, D3, D4, D5);
+
+UDP UDPClient;
+SparkTime rtc;
+
+unsigned long currentTime;
+int lastHr = -1;
+int hr;
+String lastHrStr = "clock";
+int lastMin = -1;
+int min;
+String lastMinStr = "initializing";
+
+String timeMap[] = {"o'clock", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"};
+String twenty = "twenty";
+String thirty = "thirty";
+String forty = "forty";
+String fifty = "fifty";
+
+//Used to clear a single row of the LCD
+String clearStr = "                ";
+
+
+
+void setup() {
+  rtc.begin(&UDPClient, "north-america.pool.ntp.org");
+  rtc.setTimeZone(-5); // gmt offset
+
+  // set up the LCD's number of columns and rows, and set the initial copy
+  lcd.begin(16,2);
+  lcd.print(lastHrStr);
+  lcd.setCursor(0,1);
+  lcd.print(lastMinStr);
+}
+
+
+//Convert 24-hour time to 12-hour time
+int convert12Hr(int hr) {
+    if (hr > 12) {
+        return hr - 12;
+    }
+    if (hr == 0) {
+        return 12;
+    }
+    return hr;
+}
+
+
+void loop() {
+    currentTime = rtc.now();
+
+    //There can be an error where now() returns the year.
+    //Making sure it's over 9999 ensures it's a timestamp.
+    if (currentTime < 9999) return;
+
+    //Update the hour if necessary
+    hr = convert12Hr(rtc.hour(currentTime));
+    if (hr != lastHr) {
+      String hrStr = timeMap[hr];
+      hrStr.toUpperCase();
+      lcd.setCursor(0,0);
+      lcd.print(clearStr);
+      lcd.setCursor(0,0);
+      scroll(0, 100, lastHrStr,hrStr);
+      lastHr = hr;
+      lastHrStr = hrStr;
+    }
+    //Update the minutes if necessary
+    min = rtc.minute(currentTime);
+    if (min != lastMin) {
+        lcd.setCursor(0,1);
+        lcd.print(clearStr);
+        lcd.setCursor(0,1);
+
+        String minStr;
+        if (min == 20){
+          minStr = twenty;
+        } else if (min == 30){
+          minStr = thirty;
+        } else if (min == 40){
+          minStr = forty;
+        } else if (min == 50){
+          minStr = fifty;
+        } else if (min > 20 && min < 30) {
+            minStr = twenty + "-" + timeMap[min - 20];
+        } else if (min > 30 && min < 40) {
+            minStr = thirty + "-" + timeMap[min - 30];
+        } else if (min > 40 && min < 50) {
+            minStr = forty + "-" + timeMap[min - 40];
+        } else if (min > 50 && min < 60) {
+             minStr = fifty + "-" + timeMap[min - 50];
+        } else {
+            minStr = timeMap[min];
+        }
+        scroll(1, 100, lastMinStr, minStr);
+        lastMin = min;
+        lastMinStr = minStr;
+    }
+}
+
+
+//Handles scrolling one line at a time by making one large string consisting of the
+//old time and new time, with any necessary spaces between the two
+//and extra spaces at the end.
+void scroll(int row, int speed, String oldStr, String newStr){
+    int oldStrLen = oldStr.length();
+    String scrlStr = oldStr;
+
+    //Fill in the needed spaces at the end to fill all 16 chars
+    for (int i = oldStrLen; i < 16; i++){
+        scrlStr += " ";
+    }
+    //Append the new string plus spaces afterwards
+    scrlStr += newStr;
+    scrlStr += clearStr;
+
+    //Animate in the string
+    for (int i = 1; i <= 16; i++){
+        lcd.setCursor(0, row);
+        lcd.print(scrlStr.substring(i, 16+i));
+        delay(speed);
+    }
+}

@@ -1,0 +1,26 @@
+bool RIFDactive = false;
+
+
+void setup()
+{
+    Serial.begin(57600);
+    Serial1.begin(9600);
+}
+
+void loop()
+{
+  if(RIFDactive && Serial1.available() == 0){
+    RIFDactive = false;
+    Serial.println();
+  }
+  while (Serial1.available() > 0) {
+
+        RIFDactive = true;
+        Serial.write((byte)Serial1.read());  // write does no fancy stuff like print might
+
+
+  }
+
+
+
+}
